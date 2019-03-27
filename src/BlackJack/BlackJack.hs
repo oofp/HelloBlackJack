@@ -37,6 +37,7 @@ import           Protolude
 import           BlackJack.Card
 import           Haskus.Utils.Variant
 
+-- ADT to decribe possible game result
 data GameResult 
     = BlackJack
     | PlayerWon
@@ -46,18 +47,21 @@ data GameResult
     | DealerBusted
     deriving (Show,Enum,Bounded,Typeable)
 
+-- ADT to describe possible stages of the game    
 data GameStatus 
     = PlayerTurnStatus
     | DealerFirstTurnStatus   
     | DealerNextTurnStatus
     | GameOverStatus GameResult
 
+-- Record that describe game data (notice that GameStatus is type parameter, not data parameter)    
 data GameState (gameStatus::GameStatus) (playerStatus::HandStatus) (dealerStatus::HandStatus) = GameState         
     { playerHand :: PlayerHand playerStatus
     , dealerHand :: PlayerHand dealerStatus
     , pack :: CardPack
     } deriving Show
 
+-- define allowed hand states for all game results    
 type family PlayerHandForRes (gameRes :: GameResult) :: HandStatus where
   PlayerHandForRes BlackJack = Good
   PlayerHandForRes PlayerWon = Good
@@ -72,12 +76,16 @@ type family DealerHandForRes (gameRes :: GameResult) :: HandStatus where
   DealerHandForRes Push = Good
   DealerHandForRes PlayerBusted = OneCard
   DealerHandForRes DealerBusted = Busted
-  
+ 
+-- define type aliases for all states 
 type PlayerTurn = GameState 'PlayerTurnStatus 'Good 'OneCard     
 type DealerFirstTurn = GameState 'DealerFirstTurnStatus 'Good 'OneCard     
 type DealerNextTurn = GameState 'DealerNextTurnStatus 'Good 'Good
+-- use type family to set hand states for supported game results
 type GameOver (res :: GameResult) = GameState (GameOverStatus res) (PlayerHandForRes res) (DealerHandForRes res)     
 
+-- define type level list for all possible game over states 
+-- (boilerplate could be (hopefully) avoided by using singleton package)
 type AllGameResults = 
   '[ GameOver 'BlackJack
    , GameOver 'PlayerWon
@@ -87,6 +95,7 @@ type AllGameResults =
    , GameOver 'DealerBusted
    ]
 
+-- initialize game state and all possible state transition done safely   
 initGame :: CardPack -> Either (GameOver BlackJack) PlayerTurn 
 initGame cardPack = 
     let ((card1,card2,card3), newPack) = runState (liftM3 (,,) getCard getCard getCard) cardPack 
@@ -97,6 +106,10 @@ initGame cardPack =
 
 initGameState card1 card2 card3 newPack = GameState (initWithTwoCards card1 card2) (initWithOneCard card3) newPack          
 
+-- state transition functions have signature
+-- request :: initState -> combinationOfAllowedOutcomes (one, Either or Variant)
+-- when Either is used type of new game state can be inferred
+-- if we try to use 'hand' at wrong state to create game state we get compile error
 playerHit :: PlayerTurn -> Either (GameOver PlayerBusted) PlayerTurn
 playerHit (GameState {..}) = 
     let (card, newPack) = runState getCard pack 
@@ -120,7 +133,10 @@ dealerFirstStep  = dealerStep
   
 dealerNextStep :: DealerNextTurn -> V DealerStepOutcome 
 dealerNextStep  = dealerStep
-  
+ 
+-- when type of game state cannot be inferred we pass its type as parameter using 
+-- TypeApplications , hence forall is needed (gameStatus does not appear as term parameter)
+-- {-# LANGUAGE TypeApplications      #-}
 gameState :: forall gameStatus. 
               (PlayerHand 'Good, PlayerHand 'Good, CardPack)
               -> GameState gameStatus 'Good 'Good        
@@ -150,7 +166,7 @@ dealerStep (GameState {..}) =
               LT -> toVariant $ gameOver @'DealerWon hp 
               EQ -> toVariant $ gameOver @'Push hp
 
--- getPlayerCards :: GameState gameStatus playerStatus dealerStatus -> [Card]
+-- more utilites function              
 getPlayerCards = getHandCards . playerHand
 getDealerCards = getHandCards . dealerHand
 
@@ -160,6 +176,7 @@ getGameResult _ = Proxy
 getGameResultText :: (Typeable res) => GameOver (res :: GameResult) -> Text
 getGameResultText = show . typeRep . getGameResult
 
+-- use type class to get game summary from Variant with possible game results
 class GameSummary xs where
   getGameSummary :: V xs  -> (HandCards,HandCards,Text)
 
@@ -168,5 +185,5 @@ instance GameSummary '[] where
 
 instance (x ~ GameOver res, Typeable res, GameSummary xs) => GameSummary  (x ': xs) where
   getGameSummary var = case popVariantHead var of 
-    Right gameOver -> (getPlayerCards gameOver, getDealerCards gameOver, getGameResultText gameOver)
+    Right gmOver -> (getPlayerCards gmOver, getDealerCards gmOver, getGameResultText gmOver)
     Left v_xs -> getGameSummary v_xs

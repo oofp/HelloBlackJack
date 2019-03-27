@@ -9,15 +9,6 @@
 {-# LANGUAGE UndecidableInstances  #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 
-{-
-	Rule of the game:
-	Player and Dealer
-	Each participant attempts to beat the dealer by getting a count as close to 21 as possible, without going over 21.
-	It is up to each individual player if an ace is worth 1 or 11. Face cards are 10 and any other card is its pip value.
-	Player gets two cards
-	Dealer gets one card
--}
-
 module BlackJack.Card 
   ( HandStatus (..)
   , PlayerHand
@@ -133,6 +124,7 @@ handBestScore (PlayerHand cards) =
 --more utilties funtiions
 
 --get next card from deck
+--using state monad
 getCard :: State CardPack Card
 getCard  = do
   pack <- get 
