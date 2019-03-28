@@ -19,6 +19,7 @@
 	Dealer gets one card face up, second card face down
 -}
 
+
 module BlackJack.BlackJackApp where
 
 import           Protolude

@@ -137,21 +137,25 @@ dealerNextStep  = dealerStep
 -- when type of game state cannot be inferred we pass its type as parameter using 
 -- TypeApplications , hence forall is needed (gameStatus does not appear as term parameter)
 -- {-# LANGUAGE TypeApplications      #-}
-gameState :: forall gameStatus. 
-              (PlayerHand 'Good, PlayerHand 'Good, CardPack)
-              -> GameState gameStatus 'Good 'Good        
+
+gameState :: forall gameStatus ph dh.
+              (PlayerHand ph, PlayerHand dh, CardPack)
+              -> GameState gameStatus ph dh        
 gameState (ph,dh,pack) = GameState  ph dh pack
 
-gameOver :: forall gameRes. 
-              (PlayerHand 'Good, PlayerHand 'Good, CardPack)
-              -> GameState (GameOverStatus gameRes) 'Good 'Good        
+gameOver :: 
+  forall gameRes playerHand dealerHand. 
+  ( PlayerHandForRes gameRes ~ playerHand
+  , DealerHandForRes gameRes ~ dealerHand
+  ) => (PlayerHand playerHand, PlayerHand dealerHand, CardPack)
+              -> GameState (GameOverStatus gameRes) playerHand dealerHand        
 gameOver = gameState @(GameOverStatus gameRes)
 
 dealerStep :: (CanAddCard dealerStatus  ~ 'True) => GameState gameStatus 'Good dealerStatus -> V DealerStepOutcome 
 dealerStep (GameState {..}) =     
   let (card, newPack) = runState getCard pack
   in case addCardToHand card dealerHand of
-    Left bustedHand -> toVariantAt @4 $ GameState playerHand bustedHand newPack
+    Left bustedHand -> toVariant $ gameOver @DealerBusted (playerHand,bustedHand,newPack) 
     Right goodHand -> 
       let 
         dealerScore = handBestScore goodHand

@@ -104,7 +104,8 @@ type family CanAddCard (handStatus :: HandStatus) :: Bool where
  
 --disallow adding card to Busted Hand
 --No need to check if Hand is busted - compile time guarantee!  
-addCardToHand :: (CanAddCard handStatus ~ 'True) => Card -> PlayerHand handStatus -> Either (PlayerHand Busted) (PlayerHand Good) 
+addCardToHand :: (CanAddCard handStatus ~ 'True) => Card -> PlayerHand handStatus -> 
+    Either (PlayerHand Busted) (PlayerHand Good) 
 addCardToHand card (PlayerHand cards) = 
   let newCards = card : cards
   in 
