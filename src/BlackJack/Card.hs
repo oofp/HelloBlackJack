@@ -30,17 +30,22 @@ import           GHC.TypeLits
 import           Protolude hiding (TypeError)
 import           Prelude (Show (..))
 
+-- ** Card data type and utilties functions
+
+-- !Card data type 
 data Card = Card !Int deriving Eq
+
+-- |Card pack 
 type CardPack = [Card] --52
 
---Boring Card data type and utilties functions
-
---notice using MonadIO (instead of IO to save liftIO) 
+-- |Create randomly shuffled card pack 
+-- notice using MonadIO (instead of IO to save liftIO)
 createCardPack :: (MonadIO m) => m CardPack
 createCardPack = do
   cardNumList <- liftIO $ shuffleM [0..51]
   return (Card <$> cardNumList) 
-  
+
+-- |Show instance for Card type show both value and suit of the card  
 instance Show Card where
   show (Card iVal) = cardVal (mod iVal 13) <> " " <>  suit (div iVal 13)   
       where
@@ -78,32 +83,43 @@ isBusted :: [Card] -> Bool
 isBusted cards = fst (cardsValMinMax cards) >21
 
 ---------------------------
---Hand Api
---Hand desription (Player or Dealer)
-data HandStatus = OneCard | Good | Busted -- regular ADT
+-- ** Hand (cards of player or dealer) data and functions
 
---data type promotion: datatype to data kind
--- :kind PlayerHand
--- PlayerHand :: HandStatus -> *
+-- |Hand state (Player or Dealer)
+data HandStatus
+  -- |Dealer initial Hand when only one card is exposed 
+  = OneCard 
+  -- |Two or more cards (not busted) 
+  | Good 
+  -- |Busted (sum of points exceeded 21)
+  | Busted 
+
+-- |Player hand parameterized witn promoted hand status as phantom type parameter 
 newtype PlayerHand (status :: HandStatus) = PlayerHand 
   { handCards :: [Card] 
   } deriving Show
 
--- smart constructors (so hand cannot be constructed using just PlayHand data constructor)
+-- >>> :kind PlayerHand
+-- PlayerHand :: HandStatus -> *
+
+
+-- |smart constructors (so hand cannot be constructed using just PlayHand data constructor)
+-- |with single card 
 initWithOneCard :: Card -> PlayerHand 'OneCard
 initWithOneCard card = PlayerHand [card]
 
+-- |smart constructors with two cards
 initWithTwoCards :: Card -> Card -> PlayerHand 'Good
 initWithTwoCards card1 card2 = PlayerHand [card1, card2]
 
---type family: type level function
+-- |type family (type level function) to prohibit adding card to busted hand  
 type family CanAddCard (handStatus :: HandStatus) :: Bool where
   CanAddCard 'OneCard = 'True 
   CanAddCard 'Good =    'True 
   CanAddCard 'Busted =  TypeError ('Text "Can not add card to busted hand") 
  
---disallow adding card to Busted Hand
---No need to check if Hand is busted - compile time guarantee!  
+-- |disallow adding card to Busted Hand
+-- No need to check if Hand is busted - compile time guarantee!  
 addCardToHand :: (CanAddCard handStatus ~ 'True) => Card -> PlayerHand handStatus -> 
     Either (PlayerHand Busted) (PlayerHand Good) 
 addCardToHand card (PlayerHand cards) = 
@@ -113,7 +129,7 @@ addCardToHand card (PlayerHand cards) =
       then Left $ PlayerHand newCards
       else Right $ PlayerHand newCards
 
---getting hand score only applies to 'Good' hand
+-- |getting hand score only applies to 'Good' hand
 handBestScore ::  PlayerHand 'Good -> Int
 handBestScore (PlayerHand cards) = 
   let (minScore, maxScore) = cardsValMinMax cards
@@ -122,10 +138,10 @@ handBestScore (PlayerHand cards) =
       then minScore
       else maxScore
 
---more utilties funtiions
+-- ***more utilties funtiions
 
---get next card from deck
---using state monad
+-- |get next card from deck
+-- using state monad
 getCard :: State CardPack Card
 getCard  = do
   pack <- get 
@@ -133,8 +149,9 @@ getCard  = do
     [] -> return $ Card 51 -- will never happen
     firstCard : cards -> put cards >> return firstCard
 
---card1 and card2 are Player cards, card3 is dealer card. If player got 21 
---and Dealer hasno ace nor 10 then Player got BlackJack
+-- |Check if BlackJack occured     
+-- card1 and card2 are Player cards, card3 is dealer card. If player got 21 
+-- and Dealer has neither ace nor 10 then Player got BlackJack
 gotBlackJack :: Card -> Card -> Card -> Bool 
 gotBlackJack card1 card2 card3 = 
   let (_, val1) = cardMinMaxValue card1
@@ -146,7 +163,10 @@ gotBlackJack card1 card2 card3 =
     (21,_)  -> True    
     _ -> False
 
+
+-- |HandCards (of player or dealer)     
 newtype HandCards = HandCards [Card] deriving Show
 
+-- |return HandCards (polymorhic by hand status)
 getHandCards :: PlayerHand handStatus -> HandCards
 getHandCards  = HandCards . handCards   
